@@ -1,0 +1,5 @@
+host: localhost
+database: usual-phenomenon
+user: usual-phenomenon
+password: salutecaption
+port: 5432

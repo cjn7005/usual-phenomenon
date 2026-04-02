@@ -1,0 +1,10 @@
+{
+    "users" : [
+      {"id": "UUID"},
+      {"username": "VARCHAR(40)"}
+    ],
+    "sessions" : [
+        {"id": "UUID"},
+        {"session_key": "UUID"}
+    ]
+}

@@ -6,8 +6,16 @@ from database.src.db_utils import initialize_db
 def main():
   dirs = ["api","database"]
   subdirs = ["src","tests"]
-  with open("models.json","r") as f:
+  models = "models.json"
+  with open(models,"r") as f:
     modules = json.load(f)
+
+  print(f"Generating backend from {models}")
+  print("Models:")
+  for module, attrs in modules.items():
+    print(f"  {module}:")
+    for i,item in enumerate(attrs):
+      print(f"    {list(item.keys())[0]}: {list(item.values())[0]}{"," if i < len(attrs)-1 else ""}")
 
   #region SQL
   for module, attrs in modules.items():

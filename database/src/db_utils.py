@@ -85,6 +85,7 @@ def initialize_db():
     cur = conn.cursor()
 
     for path in os.listdir("database/schema/"):
+        if ".sql" not in path: continue
         full_path = os.path.join(os.path.dirname(__file__), f'../schema/{path}')
         with open(full_path, 'r') as file:
             cur.execute(file.read())

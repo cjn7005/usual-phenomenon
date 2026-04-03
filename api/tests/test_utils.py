@@ -11,7 +11,7 @@ import requests
 def get_rest_call(url, params = {}, get_header = {}, expected_code = 200):
     response = requests.get(url, params, headers = get_header)
     assert expected_code == response.status_code, f'Response code to {url} not {expected_code}'
-    return response.json()
+    return response.json() if expected_code != 204 else None
 
 # For API calls using POST.  params and header are defaulted to 'empty'
 
@@ -27,7 +27,7 @@ def put_rest_call(url, json = {}, params = {}, put_header = {},expected_code = 2
     '''Implements a REST api using the PUT verb'''
     response = requests.put(url, json, params=params, headers = put_header)
     assert expected_code == response.status_code, f'Response code to {url} not {expected_code}'
-    return response.json()
+    return response.json() if expected_code != 204 else None
 
 # For API calls using DELETE.  header is defaulted to 'empty'
 
@@ -35,4 +35,4 @@ def delete_rest_call(url, delete_header={}, expected_code = 200):
     '''Implements a REST api using the DELETE verb'''
     response = requests.delete(url, headers = delete_header)
     assert expected_code == response.status_code, f'Response code to {url} not {expected_code}'
-    return response.json()
+    return response.json() if expected_code != 204 else None

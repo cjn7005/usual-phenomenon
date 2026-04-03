@@ -16,7 +16,7 @@ headers = {
 
   "api/tests": lambda module: (
     "from test_utils import *\n\n"\
-    f"BASE = \"http://127.0.0.1:5000/{module}\"\n\n"
+    f"BASE = \"http://127.0.0.1:5000/{module}/\"\n\n"
   ),
 
   "database" : lambda module: (
@@ -28,7 +28,7 @@ headers = {
     f"import database.src.{module} as db\n\n"
   ),
 
-  "database/tests/conftest" : lambda module: (
+  "conftest" : lambda module: (
     "import pytest\n"\
     f"from database.src import db_utils\n\n"
   ),
@@ -66,6 +66,7 @@ def make_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
 def make_creates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   create = \
    f"def create_{module}(kwargs) -> {module.capitalize()[:-1]}:\n"\
+    "\tif len(kwargs) == 0: return None\n"\
    f"\tsql = \"INSERT INTO {module} (\"\n"\
     "\tvalues = \"VALUES(\"\n"\
     "\tfor i,key in enumerate(kwargs):\n"\
@@ -86,16 +87,18 @@ def make_updates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   pk_type = list(attrs[0].values())[0][0]
   
   update = \
-   f"def update_{module}({pk}: {pk_type}, kwargs) -> None:\n"\
+   f"def update_{module}({pk}: {pk_type}, kwargs) -> {module.capitalize()[:-1]}:\n"\
     "\tkwargs = dict(kwargs)\n"\
     "\tif len(kwargs) == 0: return\n"\
    f"\tsql = \"UPDATE {module} SET \\n\"\n"\
     "\tfor i,key in enumerate(kwargs):\n"\
     "\t\tsql += f\"{key} = %({key})s\"\n"\
     "\t\tsql += \",\\n\" if i < len(kwargs)-1 else \"\\n\"\n\n"\
-   f"\tsql += \"\\nWHERE {pk} = %({pk})s\"\n\n"\
+   f"\tsql += \"\\nWHERE {pk} = %({pk})s\\n\"\n"\
+    "\tsql += \"RETURNING *\"\n\n"\
    f"\tkwargs[\"{pk}\"] = {pk}\n"\
-    "\texec_commit(sql,kwargs)\n\n"\
+    "\tresult = exec_commit_returning(sql,kwargs)[0]\n"\
+   f"\treturn {module.capitalize()[:-1]}(result)\n\n"\
   
   return update,
 
@@ -105,11 +108,12 @@ def make_deletes(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   pk_type = list(attrs[0].values())[0][0]
 
   delete = \
-   f"def delete_{module}({pk}: {pk_type}) -> None:\n"\
-   f"\tsql = \"DELETE FROM {module} WHERE {pk} = %({pk})s\"\n"\
-    "\texec_commit(sql,{"\
+   f"def delete_{module}({pk}: {pk_type}) -> {module.capitalize()[:-1]}:\n"\
+   f"\tsql = \"DELETE FROM {module} WHERE {pk} = %({pk})s RETURNING * \"\n"\
+    "\tresult = exec_commit_returning(sql,{"\
    f"\"{pk}\": {pk}"\
-    "})\n\n"\
+    "})[0]\n"\
+   f"\treturn {module.capitalize()[:-1]}(result)\n\n"
 
   return delete,
 
@@ -168,7 +172,7 @@ def make_puts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
    f"@{module}_bp.route('/<{pk}>', methods=[\"PUT\"])\n"\
    f"def put_{module}({pk}: {pk_type}):\n"\
    f"\tresult = db.update_{module}({pk}, dict(request.args))\n"\
-    "\treturn jsonify(""), 204\n\n"
+    "\treturn jsonify(result.__dict__), 200\n\n"
   
   return put,
 
@@ -181,7 +185,7 @@ def make_deletes_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
    f"@{module}_bp.route('/<{pk}>', methods=[\"DELETE\"])\n"\
    f"def delete_{module}({pk}: {pk_type}):\n"\
    f"\tresult = db.delete_{module}({pk})\n"\
-    "\treturn jsonify(""), 204\n\n"
+    "\treturn jsonify(result.__dict__), 200\n\n"
   
   return delete,
 
@@ -244,27 +248,56 @@ def test_deletes(module: str, attrs: list[Dict[str,str]]) -> list[str]:
 
 def test_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   return \
-   f"def test_get_{module}():\n"\
-    "\tresult = get_rest_call(BASE)\n"\
-    "\tassert 1+1 == 2\n\n",
+   f"def test_get_{module}(one_{module[:-1]}):\n"\
+    "\tresult = get_rest_call(BASE)[0]\n"\
+    "\texpected = {}\n"\
+   f"\tfor key, value in (one_{module[:-1]}).__dict__.items():\n"\
+    "\t\texpected[key] = str(value)\n"\
+   f"\tassert result == expected\n\n",
 
 def test_posts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
-  return \
+  result = \
    f"def test_post_{module}():\n"\
-    "\tresult = post_rest_call(BASE)\n"\
-    "\tassert 1+1 == 2\n\n",
+   f"\tnew_{module[:-1]} = "\
+    "{\n"
+  for attr in attrs:
+    attr_name = list(attr.keys())[0] 
+    attr_lst = list(attr.values())[0]
+    if len(attr_lst) < 4: continue
+    result += (f"\t\t\"{attr_name}\": {repr(attr_lst[3])}\n")
+  result += (
+    "\t}\n\n"\
+   f"\tresult = post_rest_call(BASE,json=new_{module[:-1]},expected_code=201)\n"\
+    "\texpected = {}\n"\
+   f"\tfor key, value in (new_{module[:-1]}).items():\n"\
+    "\t\texpected[key] = str(value)\n"\
+    "\tassert expected.items() <= result.items()\n\n"
+  )
+  
+  return result,
 
 def test_puts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  pk = list(attrs[0].keys())[0]
+
   return \
-   f"def test_put_{module}():\n"\
-    "\tresult = put_rest_call(BASE)\n"\
-    "\tassert 1+1 == 2\n\n",
+   f"def test_put_{module}(one_{module[:-1]}):\n"\
+   f"\tresult = put_rest_call(BASE+str(one_{module[:-1]}.{pk}), params=one_{module[:-1]}.__dict__)\n"\
+    "\texpected = {}\n"\
+   f"\tfor key, value in (one_{module[:-1]}).__dict__.items():\n"\
+    "\t\texpected[key] = str(value)\n"\
+    "\tassert expected.items() <= result.items()\n\n",
 
 def test_deletes_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  pk = list(attrs[0].keys())[0]
+
   return \
-   f"def test_delete_{module}():\n"\
-    "\tresult = delete_rest_call(BASE)\n"\
-    "\tassert 1+1 == 2\n\n",
+   f"def test_delete_{module}(one_{module[:-1]}):\n"\
+   f"\tresult = delete_rest_call(BASE+str(one_{module[:-1]}.{pk}))\n"\
+    "\tassert len(get_rest_call(BASE)) == 0\n\n"\
+    "\texpected = {}\n"\
+   f"\tfor key, value in (one_{module[:-1]}).__dict__.items():\n"\
+    "\t\texpected[key] = str(value)\n"\
+    "\tassert expected.items() <= result.items()\n\n",
             
 #endregion
 
@@ -363,52 +396,46 @@ def main():
 
       #endregion
 
-  #region DB Conftest
+  #region Conftests
 
-  with open("database/tests/conftest.py","w") as f:
-    f.write(headers["database/tests/conftest"](module))
-    # Reset database function
-    f.write(
-      "@pytest.fixture(scope=\"function\", autouse=True)\n"\
-      "def reset_database():\n"\
-      "\tsql = \"DROP TABLE IF EXISTS "
-    )
-    for i,module in enumerate(modules):
+  for direct in ["database","api"]:
+    with open(f"{direct}/tests/conftest.py","w") as f:
+      f.write(headers["conftest"](module))
+      # Reset database function
       f.write(
-        f"{module}{", " if i < len(modules)-1 else " CASCADE;\"\n"}"
+        "@pytest.fixture(scope=\"function\", autouse=True)\n"\
+        "def reset_database():\n"\
+        "\tsql = \"DROP TABLE IF EXISTS "
       )
-    f.write("\tdb_utils.exec_commit(sql)\n")
-    for i,module in enumerate(modules):
-      f.write(
-        f"\tdb_utils.exec_sql_file(\"schema/{module}.sql\")\n"
-      )
-    
-    f.write("\n\n")
+      for i,module in enumerate(modules):
+        f.write(
+          f"{module}{", " if i < len(modules)-1 else " CASCADE;\"\n"}"
+        )
+      f.write("\tdb_utils.exec_commit(sql)\n")
+      for i,module in enumerate(modules):
+        f.write(
+          f"\tdb_utils.exec_sql_file(\"schema/{module}.sql\")\n"
+        )
+      
+      f.write("\n\n")
 
-    for i, (module, attrs) in enumerate(modules.items()):
-      f.write(
-       f"from database.src.{module} import create_{module}\n\n"\
-        "@pytest.fixture(scope=\"function\")\n"\
-       f"def one_{module[:-1]}():\n"\
-       f"\tnew_{module} = "\
-        "{\n"
-      )
-      for attr in attrs:
-        attr_name = list(attr.keys())[0] 
-        attr_lst = list(attr.values())[0]
-        if len(attr_lst) < 4: continue
-        f.write(f"\t\t\"{attr_name}\": {repr(attr_lst[3])}\n")
-      f.write(
-        "\t}\n\n"\
-       f"\treturn create_{module}(new_{module})\n\n"
-      )
-
-
-  #endregion
-
-  #region API Conftest
-
-
+      for i, (module, attrs) in enumerate(modules.items()):
+        f.write(
+        f"from database.src.{module} import create_{module}\n\n"\
+          "@pytest.fixture(scope=\"function\")\n"\
+        f"def one_{module[:-1]}():\n"\
+        f"\tnew_{module} = "\
+          "{\n"
+        )
+        for attr in attrs:
+          attr_name = list(attr.keys())[0] 
+          attr_lst = list(attr.values())[0]
+          if len(attr_lst) < 4: continue
+          f.write(f"\t\t\"{attr_name}\": {repr(attr_lst[3])}\n")
+        f.write(
+          "\t}\n\n"\
+        f"\treturn create_{module}(new_{module})\n\n"
+        )
 
   #endregion
   

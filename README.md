@@ -20,7 +20,7 @@ To generate the code, first you must define your backend schema. To do this, you
 
 1. `python_type`: The attribute type as it will appear in Python type hints (e.g. str, int, datetime, etc.). Imported types should be definied in `stubber.py` (see [Setup](#setup)).
 2. `sql_type`: The attribute type as it will appear in PostgreSQL (e.g. INT, UUID, TIMESTAMP, etc.). 
-3. `column_parameters`: Any additional parameters to define in the sql table (e.g. `DEFAULT: 'John Doe'`). **Note:** Do not define `PRIMARY KEY` here, that is automatically generated from the first attribute.
+3. `column_parameters`: Any additional parameters to define in the sql table (e.g. `DEFAULT: 'John Doe'`). **Note:** Do not define `PRIMARY KEY` here, that is automatically generated from the first attribute. If you define foreign keys (i.e. `REFERENCES`), then be sure that the table it references comes earlier in `models.json`.
 4. `sample_value`: An example value, used for testing. This is optional **unless** the attribute is required (i.e. `NOT NULL`).
 
 ```json
@@ -86,7 +86,7 @@ This will also intialize the database tables for you. All that's left for you to
 python -m flask --app api/server.py run [--debug]
 ```
 
-The stubber will also generate the text file `database/schema/schema.txt`. This is a translated .sql file of all the generated tables that can be copy-pasted into [dbdiagram.io](https://dbdiagram.io/) (my database visualizer of choice).
+The stubber will also generate the text file `database/schema/schema.txt`. This is a translated .sql file of all the generated tables that can be copy-pasted into [dbdiagram.io](https://dbdiagram.io/) (my database visualizer of choice). Foreign key references may need to be "massaged" a bit.
 
 ## Teardown
 

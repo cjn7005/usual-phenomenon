@@ -2,7 +2,7 @@ import json
 import os
 from typing import Dict
 
-from database.src.db_utils import initialize_db
+from database.src.db_utils import exec_sql_file, initialize_db
 from dbdiagram import translate
 
 #region Headers
@@ -52,12 +52,29 @@ headers = {
 def make_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   all = \
    f"def get_all_{module}() -> list[{module.capitalize()[:-1]}]:\n"\
+    "\t\"\"\"\n"\
+   f"\tReturns all {module} in the database\n\n"\
+    "\tReturns:\n"\
+   f"\t\tlist[{module.capitalize()[:-1]}]: all {module} in the database\n"\
+    "\t\"\"\"\n"\
    f"\tsql = \"SELECT * FROM {module};\"\n\n"\
     "\tresult = exec_get_all(sql)\n\n"\
    f"\treturn [{module.capitalize()[:-1]}(row) for row in result]\n\n"
   
   queried = \
    f"def get_{module}(kwargs) -> list[{module.capitalize()[:-1]}]:\n"\
+    "\t\"\"\"\n"\
+   f"\tReturns {module} with matching attributes\n\n"\
+    "\t## Kwargs:\n"
+  
+  for attr in attrs:
+    queried += f"\t\t:{list(attr.keys())[0]} ({list(attr.values())[0][0]}): "\
+     f"the {module[:-1]}\'s {list(attr.keys())[0]}\n"
+
+  queried += \
+    "\n\tReturns:\n"\
+   f"\t\tlist[{module.capitalize()[:-1]}]: all {module} in the database\n"\
+    "\t\"\"\"\n"\
    f"\tif not kwargs: return get_all_{module}()\n"\
    f"\tsql = \"SELECT * FROM {module} WHERE\\n\"\n"\
    f"\tfor i,key in enumerate(kwargs):\n"\
@@ -72,6 +89,19 @@ def make_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
 def make_creates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   create = \
    f"def create_{module}(kwargs) -> {module.capitalize()[:-1]}:\n"\
+    "\t\"\"\"\n"\
+   f"\tCreates and returns a {module[:-1]}\n\n"\
+    "\t## Kwargs:\n"
+  
+  for attr in attrs:
+    dat = list(attr.values())[0]
+    create += f"\t\t:{list(attr.keys())[0]} ({dat[0]}{", optional" if ("NOT NULL" not in dat[2].upper() or "DEFAULT" in dat[2].upper()) else ""}): "\
+     f"the {module[:-1]}\'s {list(attr.keys())[0]}\n"
+
+  create += \
+    "\n\tReturns:\n"\
+   f"\t\t{module.capitalize()[:-1]}: the created {module[:-1]}\n"\
+    "\t\"\"\"\n"\
     "\tif len(kwargs) == 0: return None\n"\
    f"\tsql = \"INSERT INTO {module} (\"\n"\
     "\tvalues = \"VALUES(\"\n"\
@@ -94,6 +124,20 @@ def make_updates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   
   update = \
    f"def update_{module}({pk}: {pk_type}, kwargs) -> {module.capitalize()[:-1]}:\n"\
+    "\t\"\"\"\n"\
+   f"\tUpdates and returns a {module[:-1]} from its {pk}\n\n"\
+   f"\tArgs:\n"\
+   f"\t\t{pk} ({pk_type}): the {module[:-1]} to update\n\n"\
+    "\t## Kwargs:\n"
+  
+  for attr in attrs:
+    update += f"\t\t:{list(attr.keys())[0]} ({list(attr.values())[0][0]}): "\
+     f"the {module[:-1]}\'s {list(attr.keys())[0]}\n"
+
+  update += \
+    "\n\tReturns:\n"\
+   f"\t\t{module.capitalize()[:-1]}: the updated {module[:-1]}\n"\
+    "\t\"\"\"\n"\
     "\tkwargs = dict(kwargs)\n"\
     "\tif len(kwargs) == 0: return\n"\
    f"\tsql = \"UPDATE {module} SET \\n\"\n"\
@@ -115,6 +159,13 @@ def make_deletes(module: str, attrs: list[Dict[str,str]]) -> list[str]:
 
   delete = \
    f"def delete_{module}({pk}: {pk_type}) -> {module.capitalize()[:-1]}:\n"\
+    "\t\"\"\"\n"\
+   f"\tDeletes a {module[:-1]} from its {pk}\n\n"\
+    "\tArgs:\n"\
+   f"\t\t{pk} ({pk_type}): the {module[:-1]} to delete\n\n"\
+    "\tReturns:\n"\
+   f"\t\t{module.capitalize()[:-1]}: the deleted {module[:-1]}\n"\
+    "\t\"\"\"\n"\
    f"\tsql = \"DELETE FROM {module} WHERE {pk} = %({pk})s RETURNING * \"\n"\
     "\tresult = exec_commit_returning(sql,{"\
    f"\"{pk}\": {pk}"\
@@ -134,6 +185,11 @@ def make_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   from_pk = \
    f"@{module}_bp.route('/<{pk}>', methods=[\"GET\"])\n"\
    f"def get_{module}_from_pk({pk}: {pk_type}):\n"\
+    "\t\"\"\"\n"\
+   f"\tReturns a specific {module[:-1]} from its {pk}\n\n"\
+   f"\tArgs:\n"\
+   f"\t\t{pk} ({pk_type}): the {module[:-1]}'s {pk}\n"\
+    "\t\"\"\"\n"\
    f"\tresult = db.get_{module}("\
     "{"\
    f"\"{pk}\": {pk}"\
@@ -151,6 +207,18 @@ def make_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   queried = \
    f"@{module}_bp.route('/', methods=[\"GET\"])\n"\
    f"def get_{module}_from_query():\n"\
+    "\t\"\"\"\n"\
+   f"\tReturns {module} with matching attributes\n\n"\
+    "\t## Query parameters:\n"
+  
+  for attr in attrs:
+    queried += f"\t\t:{list(attr.keys())[0]} ({list(attr.values())[0][0]}): "\
+     f"the {module[:-1]}\'s {list(attr.keys())[0]}\n"
+
+  queried += \
+    "\n\tReturns:\n"\
+   f"\t\tlist[{module.capitalize()[:-1]}]: all {module} in the database\n"\
+    "\t\"\"\"\n"\
    f"\tresult = db.get_{module}(request.args)\n"\
     "\tif result is not None:\n"\
     "\t\treturn jsonify([row.__dict__ for row in result]), 200\n"\
@@ -164,6 +232,17 @@ def make_posts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   post = \
    f"@{module}_bp.route('/', methods=[\"POST\"])\n"\
    f"def post_{module}():\n"\
+    "\t\"\"\"\n"\
+   f"\tCreates and returns a {module[:-1]}\n\n"\
+    "\t## Body Parameters:\n"
+  
+  for attr in attrs:
+    dat = list(attr.values())[0]
+    post += f"\t\t:{list(attr.keys())[0]} ({dat[0]}{", optional" if ("NOT NULL" not in dat[2].upper() or "DEFAULT" in dat[2].upper()) else ""}): "\
+     f"the {module[:-1]}\'s {list(attr.keys())[0]}\n"
+
+  post += \
+    "\n\t\"\"\"\n"\
    f"\tresult = db.create_{module}(request.json)\n"\
     "\treturn jsonify(result.__dict__), 201\n\n"
   
@@ -177,6 +256,18 @@ def make_puts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   put = \
    f"@{module}_bp.route('/<{pk}>', methods=[\"PUT\"])\n"\
    f"def put_{module}({pk}: {pk_type}):\n"\
+    "\t\"\"\"\n"\
+   f"\tUpdates and returns a {module[:-1]} from its {pk}\n\n"\
+   f"\tArgs:\n"\
+   f"\t\t{pk} ({pk_type}): the {module[:-1]} to update\n\n"\
+    "\t## Query parameters:\n"
+  
+  for attr in attrs:
+    put += f"\t\t:{list(attr.keys())[0]} ({list(attr.values())[0][0]}): "\
+     f"the {module[:-1]}\'s {list(attr.keys())[0]}\n"
+
+  put += \
+    "\t\"\"\"\n"\
    f"\tresult = db.update_{module}({pk}, dict(request.args))\n"\
     "\treturn jsonify(result.__dict__), 200\n\n"
   
@@ -190,6 +281,11 @@ def make_deletes_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   delete = \
    f"@{module}_bp.route('/<{pk}>', methods=[\"DELETE\"])\n"\
    f"def delete_{module}({pk}: {pk_type}):\n"\
+    "\t\"\"\"\n"\
+   f"\tDeletes a {module[:-1]} from its {pk}\n\n"\
+    "\tArgs:\n"\
+   f"\t\t{pk} ({pk_type}): the {module[:-1]} to delete\n"\
+    "\t\"\"\"\n"\
    f"\tresult = db.delete_{module}({pk})\n"\
     "\treturn jsonify(result.__dict__), 200\n\n"
   
@@ -344,11 +440,13 @@ def main():
   #region SQL
 
   for module, attrs in modules.items():
+    print(module)
     with open(f"database/schema/{module}.sql", "w") as f:
       f.write(f"CREATE TABLE IF NOT EXISTS {module} (\n")
       for i,attr in enumerate(attrs):
         f.write(f"\t{list(attr.keys())[0]} {list(attr.values())[0][1]} {list(attr.values())[0][2]} {"PRIMARY KEY" if i == 0 else ""}{"," if i < len(attrs)-1 else ""}\n")
       f.write(");\n")
+    exec_sql_file(f"schema/{module}.sql")
 
   with open("database/schema/schema.txt","w") as f:
     f.write(translate())

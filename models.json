@@ -80,7 +80,7 @@
       "user_id": [
         "UUID",
         "UUID",
-        "NOT NULL",
+        "REFERENCES users NOT NULL",
         "550e8400-e29b-41d4-a716-446655440000"
       ]
     },
@@ -114,7 +114,7 @@
       "product_id": [
         "int",
         "INTEGER",
-        "NOT NULL",
+        "REFERENCES products NOT NULL",
         "101"
       ]
     },

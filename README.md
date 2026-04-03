@@ -41,7 +41,7 @@ To generate the code, first you must define your backend schema. To do this, you
         {"attr2": ["..."]}
     ],
     "//" : "For example:",
-    "//" : "(Make it plural)",
+    "//" : "(Make the module plural)",
     "users": [ 
         {"id": [
             "UUID",

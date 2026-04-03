@@ -46,7 +46,7 @@ def make_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
    f"\treturn [{module.capitalize()}(row) for row in result]\n\n"
   
   queried = \
-   f"def get_{module}(**kwargs) -> list[{module.capitalize()}]:\n"\
+   f"def get_{module}(kwargs) -> list[{module.capitalize()}]:\n"\
    f"\tif not kwargs: return get_all_{module}()\n"\
    f"\tsql = \"SELECT * FROM {module} WHERE\\n\"\n"\
    f"\tfor i,key in enumerate(kwargs):\n"\
@@ -60,7 +60,7 @@ def make_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
 
 def make_creates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   create = \
-   f"def create_{module}(**kwargs) -> {module.capitalize()}:\n"\
+   f"def create_{module}(kwargs) -> {module.capitalize()}:\n"\
    f"\tsql = \"INSERT INTO {module} (\"\n"\
     "\tvalues = \"VALUES(\"\n"\
     "\tfor i,key in enumerate(kwargs):\n"\
@@ -81,7 +81,7 @@ def make_updates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   pk_type = list(attrs[0].values())[0][0]
   
   update = \
-   f"def update_{module}({pk}: {pk_type}, **kwargs) -> None:\n"\
+   f"def update_{module}({pk}: {pk_type}, kwargs) -> None:\n"\
    f"\tsql = \"UPDATE {module} SET \\n\"\n"\
     "\tfor i,key in enumerate(kwargs):\n"\
     "\t\tsql += f\"{key} = %({key})s\"\n"\
@@ -117,7 +117,10 @@ def make_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   from_pk = \
    f"@{module}_bp.route('/<{pk}>', methods=[\"GET\"])\n"\
    f"def get_{module}_from_pk({pk}: {pk_type}):\n"\
-   f"\tresult = db.get_{module}({pk}={pk})\n"\
+   f"\tresult = db.get_{module}("\
+    "{"\
+   f"\"{pk}\": {pk}"\
+    "})\n"\
     "\tif result is not None:\n"\
     "\t\treturn jsonify([row.__dict__ for row in result]), 200\n"\
     "\telse:\n"\
@@ -131,7 +134,7 @@ def make_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   queried = \
    f"@{module}_bp.route('/', methods=[\"GET\"])\n"\
    f"def get_{module}_from_query():\n"\
-   f"\tresult = db.get_{module}(request.args)\n"\
+   f"\tresult = db.get_{module}(kwargs=dict(request.args))\n"\
     "\tif result is not None:\n"\
     "\t\treturn jsonify([row.__dict__ for row in result]), 200\n"\
     "\telse:\n"\
@@ -257,12 +260,11 @@ def main():
   #region Models
 
   with open("database/src/models.py","w") as f:
-    f.write("from pydantic import BaseModel\n\n")
     for module, attrs in modules.items():
-      f.write(f"class {module.capitalize()}(BaseModel):\n")
+      f.write(f"class {module.capitalize()}:\n")
       for attr in attrs:
         f.write(f"\t{list(attr.keys())[0]}: {list(attr.values())[0][0]}\n")
-      f.write("\n\tdef __init__(self, *args):\n")
+      f.write("\n\tdef __init__(self, args):\n")
       for i,attr in enumerate(attrs):
         f.write(f"\t\tself.{list(attr.keys())[0]} = args[{i}]\n")
       f.write("\n\n")
@@ -284,9 +286,28 @@ def main():
   for (direct, subdir, module) in gen:
     with open(f"{direct}/{subdir}/{"test_" if subdir == "tests" else ""}{module}{"_api" if subdir == "tests" and direct == "api" else ""}.py", "w") as f:
 
+      #region Database
+
+      if direct == "database":
+        f.write(headers["database"](module))
+        
+        if subdir == "src":
+          for method in [make_gets,make_creates,make_updates,make_deletes]:
+            for function in method(module, attrs):
+              f.write(function)
+            f.write("\n")
+
+        elif subdir == "tests":
+          f.write(headers["database/tests"](module))
+          for method in [test_gets,test_creates,test_updates,test_deletes]:
+            for function in method(module, attrs):
+              f.write(function)
+              
+      #endregion
+
       #region API
 
-      if direct == "api":
+      elif direct == "api":
 
         if subdir == "src":
           f.write(headers["api/src"](module))
@@ -303,29 +324,11 @@ def main():
               f.write(function)
 
       #endregion
-
-      #region Database
-
-      elif direct == "database":
-        f.write(headers["database"](module))
-        
-        if subdir == "src":
-          for method in [make_gets,make_creates,make_updates,make_deletes]:
-            for function in method(module, attrs):
-              f.write(function)
-            f.write("\n")
-
-        elif subdir == "tests":
-          f.write(headers["database/tests"](module))
-          for method in [test_gets,test_creates,test_updates,test_deletes]:
-            for function in method(module, attrs):
-              f.write(function)
-      #endregion
   
   #region Server
 
   with open("api/server.py", "w") as f:
-    f.write(headers["api/src"](module))
+    f.write(headers["server"](module))
 
     for module in modules:
       f.write(f"from api.src.{module} import {module}_bp\n")
@@ -342,7 +345,7 @@ def main():
       "def hello_world():\n"\
       "\treturn 'Hello world!'\n\n"\
       "if __name__ == \"__main__\":\n"\
-      "\t# python3 -m flask --app api/src/server.py run --debug\n"\
+      "\t# python3 -m flask --app api/server.py run --debug\n"\
       "\tif len(sys.argv) > 1:\n"\
       "\t\tdebug = sys.argv[1] == \"--debug\"\n"\
       "\telse:\n"\

@@ -4,6 +4,38 @@ from typing import Dict
 
 from database.src.db_utils import initialize_db
 
+#region Headers
+# imports, globals, etc.
+
+headers = {
+  "api/src": lambda module: (
+    "from flask import Blueprint, jsonify, request\n"\
+   f"from database.src import {module} as db\n\n"\
+   f"{module}_bp = Blueprint(\"{module}\",__name__,url_prefix=\"/{module}\")\n\n"
+  ),
+
+  "api/tests": lambda module: (
+    "from test_utils import *\n\n"\
+    f"BASE = \"http://127.0.0.1:5000/{module}\"\n\n"
+  ),
+
+  "database" : lambda module: (
+    "from database.src.db_utils import *\n"\
+   f"from database.src.models import {module.capitalize()}\n\n"
+  ),
+
+  "database/tests" : lambda module: (
+    f"import database.src.{module} as db\n\n"
+  ),
+
+  "server" : lambda module: (
+    "from flask import Flask\n"\
+    "import sys\n\n"
+  )
+}
+
+#endregion
+
 #region DB Methods
 
 def make_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
@@ -45,25 +77,31 @@ def make_creates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
 
 
 def make_updates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  pk = list(attrs[0].keys())[0]
+  pk_type = list(attrs[0].values())[0][0]
+  
   update = \
-   f"def update_{module}({list(attrs[0].keys())[0]}: {list(attrs[0].values())[0][0]}, **kwargs) -> None:\n"\
+   f"def update_{module}({pk}: {pk_type}, **kwargs) -> None:\n"\
    f"\tsql = \"UPDATE {module} SET \\n\"\n"\
     "\tfor i,key in enumerate(kwargs):\n"\
     "\t\tsql += f\"{key} = %({key})s\"\n"\
     "\t\tsql += \",\\n\" if i < len(kwargs)-1 else \"\\n\"\n\n"\
-   f"\tsql += \"\\nWHERE {list(attrs[0].keys())[0]} = %({list(attrs[0].keys())[0]})s\"\n\n"\
-   f"\tkwargs[\"{list(attrs[0].keys())[0]}\"] = {list(attrs[0].keys())[0]}\n"\
+   f"\tsql += \"\\nWHERE {pk} = %({pk})s\"\n\n"\
+   f"\tkwargs[\"{pk}\"] = {pk}\n"\
     "\texec_commit(sql,kwargs)\n\n"\
   
   return update,
 
 
 def make_deletes(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  pk = list(attrs[0].keys())[0]
+  pk_type = list(attrs[0].values())[0][0]
+
   delete = \
-   f"def delete_{module}({list(attrs[0].keys())[0]}: {list(attrs[0].values())[0][0]}) -> None:\n"\
-   f"\tsql = \"DELETE FROM {module} WHERE {list(attrs[0].keys())[0]} = %({list(attrs[0].keys())[0]})s\"\n"\
+   f"def delete_{module}({pk}: {pk_type}) -> None:\n"\
+   f"\tsql = \"DELETE FROM {module} WHERE {pk} = %({pk})s\"\n"\
     "\texec_commit(sql,{"\
-   f"\"{list(attrs[0].keys())[0]}\": {list(attrs[0].keys())[0]}"\
+   f"\"{pk}\": {pk}"\
     "})\n\n"\
 
   return delete,
@@ -73,23 +111,127 @@ def make_deletes(module: str, attrs: list[Dict[str,str]]) -> list[str]:
 #region API Methods
 
 def make_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
-  return []
+  pk = list(attrs[0].keys())[0]
+  pk_type = list(attrs[0].values())[0][0]
+
+  from_pk = \
+   f"@{module}_bp.route('/<{pk}>', methods=[\"GET\"])\n"\
+   f"def get_{module}_from_pk({pk}: {pk_type}):\n"\
+   f"\tresult = db.get_{module}({pk}={pk})\n"\
+    "\tif result is not None:\n"\
+    "\t\treturn jsonify([row.__dict__ for row in result]), 200\n"\
+    "\telse:\n"\
+    "\t\treturn jsonify({\"error\": f\""\
+   f"{module.capitalize()[:-1]}"\
+    " {"\
+   f"{pk}"\
+    "} "\
+    "not found\"}), 404\n\n"
+  
+  queried = \
+   f"@{module}_bp.route('/', methods=[\"GET\"])\n"\
+   f"def get_{module}_from_query():\n"\
+   f"\tresult = db.get_{module}(request.args)\n"\
+    "\tif result is not None:\n"\
+    "\t\treturn jsonify([row.__dict__ for row in result]), 200\n"\
+    "\telse:\n"\
+    "\t\treturn jsonify([]), 204\n\n"
+  
+  return from_pk, queried 
 
 
 def make_posts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
-  return []
+  post = \
+   f"@{module}_bp.route('/', methods=[\"POST\"])\n"\
+   f"def post_{module}():\n"\
+   f"\tresult = db.create_{module}(request.json)\n"\
+    "\treturn jsonify(result.__dict__), 201\n\n"
+  
+  return post,
 
 
 def make_puts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
-  return []
+  pk = list(attrs[0].keys())[0]
+  pk_type = list(attrs[0].values())[0][0]
+
+  put = \
+   f"@{module}_bp.route('/<{pk}>', methods=[\"PUT\"])\n"\
+   f"def put_{module}({pk}: {pk_type}):\n"\
+   f"\tresult = db.update_{module}({pk}, request.args)\n"\
+    "\treturn jsonify(result.__dict__), 200\n\n"
+  
+  return put,
 
 
-def make_get_deletes_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
-  return []
+def make_deletes_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  pk = list(attrs[0].keys())[0]
+  pk_type = list(attrs[0].values())[0][0]
+
+  delete = \
+   f"@{module}_bp.route('/<{pk}>', methods=[\"DELETE\"])\n"\
+   f"def delete_{module}({pk}: {pk_type}):\n"\
+   f"\tresult = db.delete_{module}({pk})\n"\
+    "\treturn jsonify(""), 204\n\n"
+  
+  return delete,
 
 #endregion
 
+#region DB Tests
 
+def test_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  return \
+   f"def test_get_{module}():\n"\
+   f"\tresult = db.get_{module}()\n"\
+    "\tassert 1+1 == 2\n\n",
+
+def test_creates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  return \
+   f"def test_create_{module}():\n"\
+   f"\tresult = db.create_{module}()\n"\
+    "\tassert 1+1 == 2\n\n",
+
+def test_updates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  return \
+   f"def test_update_{module}():\n"\
+   f"\tresult = db.update_{module}()\n"\
+    "\tassert 1+1 == 2\n\n",
+
+def test_deletes(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  return \
+   f"def test_delete_{module}():\n"\
+   f"\tresult = db.delete_{module}()\n"\
+    "\tassert 1+1 == 2\n\n",
+
+#endregion
+
+#region API Tests
+
+def test_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  return \
+   f"def test_get_{module}():\n"\
+    "\tresult = get_rest_call(BASE)\n"\
+    "\tassert 1+1 == 2\n\n",
+
+def test_posts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  return \
+   f"def test_post_{module}():\n"\
+    "\tresult = post_rest_call(BASE)\n"\
+    "\tassert 1+1 == 2\n\n",
+
+def test_puts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  return \
+   f"def test_put_{module}():\n"\
+    "\tresult = put_rest_call(BASE)\n"\
+    "\tassert 1+1 == 2\n\n",
+
+def test_deletes_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+  return \
+   f"def test_delete_{module}():\n"\
+    "\tresult = delete_rest_call(BASE)\n"\
+    "\tassert 1+1 == 2\n\n",
+            
+#endregion
 
 def main():
   dirs = ["api","database"]
@@ -98,6 +240,7 @@ def main():
   with open(models,"r") as f:
     modules = json.load(f)
 
+  # Double check dirs are there
   os.makedirs("database/schema", exist_ok=True)
   os.makedirs("database/src", exist_ok=True)
   os.makedirs("database/tests", exist_ok=True)
@@ -146,53 +289,25 @@ def main():
       if direct == "api":
 
         if subdir == "src":
-          f.write(
-f"""
-from flask import Blueprint, jsonify, request
-from database.src import {module} as db
-
-{module}_bp = Blueprint("{module}",__name__,url_prefix="/{module}")
-
-"""
-            )
-          for method, db_method in zip(["get","post","put","delete"],
-                                       ["get","insert","update","delete"]):
-            f.write(
-f"""
-@{module}_bp.route('/', methods=["{method.upper()}"])
-def {method}_{module}():
-  result = db.{db_method}_{module}()
-  return jsonify(result)
-
-"""
-            )
+          f.write(headers["api/src"](module))
+          for method in [make_gets_api,make_posts_api,make_puts_api,make_deletes_api]:
+            for function in method(module, attrs):
+              f.write(function)
+            f.write("\n")
 
 
         elif subdir == "tests":
-          f.write("from test_utils import *\n")
-          f.write(f"BASE = \"http://127.0.0.1:5000/{module}\"\n")
-          for method in ["get","post","put","delete"]:
-            f.write(
-f"""
-def test_{method}_{module}():
-    result = {method}_rest_call(BASE)
-    assert 1+1 == 2
-
-"""
-            )
+          f.write(headers["api/tests"](module))
+          for method in [test_gets_api,test_posts_api,test_puts_api,test_deletes_api]:
+            for function in method(module, attrs):
+              f.write(function)
 
       #endregion
 
       #region Database
 
       elif direct == "database":
-        f.write(
-f"""
-from database.src.db_utils import *
-from database.src.models import {module.capitalize()}
-
-"""
-            )
+        f.write(headers["database"](module))
         
         if subdir == "src":
           for method in [make_gets,make_creates,make_updates,make_deletes]:
@@ -201,53 +316,38 @@ from database.src.models import {module.capitalize()}
             f.write("\n")
 
         elif subdir == "tests":
-          f.write(f"import database.src.{module} as db\n")
-          for method in ["get","insert","update","delete"]:
-            f.write(
-f"""
-def test_{method}_{module}():
-    result = db.{method}_{module}()
-    assert 1+1 == 2
-
-"""
-            )
+          f.write(headers["database/tests"](module))
+          for method in [test_gets,test_creates,test_updates,test_deletes]:
+            for function in method(module, attrs):
+              f.write(function)
       #endregion
   
   #region Server
 
   with open("api/server.py", "w") as f:
-    f.write(
-f"""
-from flask import Flask
-import sys
-
-"""
-    )
+    f.write(headers["api/src"](module))
 
     for module in modules:
-      f.write(f"from api.src.{module} import {module}_bp\n\n")
+      f.write(f"from api.src.{module} import {module}_bp\n")
+    f.write("\n")
       
     f.write("app = Flask(__name__)\n\n")
 
     for module in modules:
-      f.write(f"app.register_blueprint({module}_bp)\n\n")
+      f.write(f"app.register_blueprint({module}_bp)\n")
+    f.write("\n")
 
     f.write(
-f"""
-@app.route('/')
-def hello_world():
-    return 'Hello world!'
-
-
-if __name__ == "__main__":
-    # python3 -m flask --app api/src/server.py run --debug
-    if len(sys.argv) > 1:
-        debug = sys.argv[1] == "--debug"
-    else:
-        debug = False
-    app.run(debug=debug)
-
-"""
+      "@app.route('/')\n"\
+      "def hello_world():\n"\
+      "\treturn 'Hello world!'\n\n"\
+      "if __name__ == \"__main__\":\n"\
+      "\t# python3 -m flask --app api/src/server.py run --debug\n"\
+      "\tif len(sys.argv) > 1:\n"\
+      "\t\tdebug = sys.argv[1] == \"--debug\"\n"\
+      "\telse:\n"\
+      "\t\tdebug = False\n"\
+      "\tapp.run(debug=debug)\n"
     )
 
     #endregion

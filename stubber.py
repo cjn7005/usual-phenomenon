@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Dict
+from typing import Any, Dict
 
 from database.src.db_utils import exec_sql_file, initialize_db
 from dbdiagram import translate
@@ -86,17 +86,30 @@ def get_attr_arguments(attr) -> Dict[str,str]:
   }
 
 
-def write_methods(f, module, attrs, method, label) -> None:
+def write_methods(f, module, attrs, method, label, modules) -> None:
   f.write(f"#region {label}\n\n")
-  for function in method(module, attrs):
+  for function in method(module, attrs, modules):
     f.write(function)
   f.write("#endregion\n\n")
 
+
+def get_dependencies(modules, attrs) -> Dict[str,str]:
+  dependencies = {}
+  parameters = ""
+  first = True
+  for attr in attrs:
+    for other, other_attrs in modules.items():
+      if f"REFERENCES {other}".upper() in get_attr_arguments(attr)["column_parameters"].upper():
+        dependencies[get_attr_name(attr)] = [other, get_pk(other_attrs), 
+                                             f"one_{get_singular(other)}.{get_pk(other_attrs)}"]
+        parameters += f"{", " if not first else ""}one_{get_singular(other)}"
+
+  return parameters, dependencies
 #endregion
 
 #region DB Methods
 
-def make_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def make_gets(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
   Object = get_Object(module)
 
@@ -137,7 +150,7 @@ def make_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   return all, queried
   
 
-def make_creates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def make_creates(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
   Object = get_Object(module)
 
@@ -176,7 +189,7 @@ def make_creates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   return create,
 
 
-def make_updates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def make_updates(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   pk = get_pk(attrs)
   pk_type = get_pk_arguments(attrs)["python_type"]
   singular = get_singular(module)
@@ -215,7 +228,7 @@ def make_updates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   return update,
 
 
-def make_deletes(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def make_deletes(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   pk = get_pk(attrs)
   pk_type = get_pk_arguments(attrs)["python_type"]
   singular = get_singular(module)
@@ -240,7 +253,7 @@ def make_deletes(module: str, attrs: list[Dict[str,str]]) -> list[str]:
 
 #region API Methods
 
-def make_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def make_gets_api(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   pk = get_pk(attrs)
   pk_type = get_pk_arguments(attrs)["python_type"]
   singular = get_singular(module)
@@ -286,7 +299,7 @@ def make_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   return from_pk, queried 
 
 
-def make_posts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def make_posts_api(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
 
   post = \
@@ -313,7 +326,7 @@ def make_posts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   return post,
 
 
-def make_puts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def make_puts_api(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   pk = get_pk(attrs)
   pk_type = get_pk_arguments(attrs)["python_type"]
   singular = get_singular(module)
@@ -341,7 +354,7 @@ def make_puts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   return put,
 
 
-def make_deletes_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def make_deletes_api(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   pk = get_pk(attrs)
   pk_type = get_pk_arguments(attrs)["python_type"]
   singular = get_singular(module)
@@ -363,7 +376,7 @@ def make_deletes_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
 
 #region DB Tests
 
-def test_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def test_gets(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
   Object = get_Object(module)
   pk = get_pk(attrs)
@@ -376,12 +389,13 @@ def test_gets(module: str, attrs: list[Dict[str,str]]) -> list[str]:
     "})[0]\n"\
    f"\tassert result == one_{singular}\n\n",
 
-def test_creates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def test_creates(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
   Object = get_Object(module)
+  parameters, dependencies = get_dependencies(modules, attrs)
 
   result = \
-   f"def test_create_{module}():\n"\
+   f"def test_create_{module}({parameters}):\n"\
    f"\tnew_{singular} = "\
     "{\n"
   for attr in attrs:
@@ -397,7 +411,7 @@ def test_creates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   
   return result,
 
-def test_updates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def test_updates(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
   Object = get_Object(module)
   pk = get_pk(attrs)
@@ -410,7 +424,7 @@ def test_updates(module: str, attrs: list[Dict[str,str]]) -> list[str]:
    f"\tresult = {Object}(exec_get_one(\"SELECT * FROM {module}\"))\n\n"\
     "\tassert expected == result\n\n",
 
-def test_deletes(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def test_deletes(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
   Object = get_Object(module)
   pk = get_pk(attrs)
@@ -425,7 +439,7 @@ def test_deletes(module: str, attrs: list[Dict[str,str]]) -> list[str]:
 
 #region API Tests
 
-def test_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def test_gets_api(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
   Object = get_Object(module)
   pk = get_pk(attrs)
@@ -435,13 +449,14 @@ def test_gets_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
     "\tresult = get_rest_call(BASE)[0]\n"\
    f"\tassert result.get(\"{pk}\")\n\n",
 
-def test_posts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def test_posts_api(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
   Object = get_Object(module)
   pk = get_pk(attrs)
+  parameters, dependencies = get_dependencies(modules, attrs)
 
   result = \
-   f"def test_post_{module}():\n"\
+   f"def test_post_{module}({parameters}):\n"\
    f"\tnew_{singular} = "\
     "{\n"
   for attr in attrs:
@@ -457,7 +472,7 @@ def test_posts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
   
   return result,
 
-def test_puts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def test_puts_api(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
   Object = get_Object(module)
   pk = get_pk(attrs)
@@ -468,7 +483,7 @@ def test_puts_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
     "\texpected = {}\n"\
    f"\tassert result.get(\"{pk}\")\n\n",
 
-def test_deletes_api(module: str, attrs: list[Dict[str,str]]) -> list[str]:
+def test_deletes_api(module: str, attrs: list[Dict[str,str]], modules: Dict[str,Any]) -> list[str]:
   singular = get_singular(module)
   Object = get_Object(module)
   pk = get_pk(attrs)
@@ -555,13 +570,13 @@ def main():
         if subdir == "src":
           for method,label in zip([make_gets,make_creates,make_updates,make_deletes],
                                   ["Get Methods","Create Methods","Update Methods","Delete Methods"]):
-            write_methods(f,module,attrs,method,label)
+            write_methods(f,module,attrs,method,label,modules)
 
         elif subdir == "tests":
           f.write(headers["database/tests"](module))
           for method,label in zip([test_gets,test_creates,test_updates,test_deletes],
                                   ["Get Methods","Create Methods","Update Methods","Delete Methods"]):
-            write_methods(f,module,attrs,method,label)
+            write_methods(f,module,attrs,method,label,modules)
               
       #endregion
 
@@ -573,73 +588,65 @@ def main():
           f.write(headers["api/src"](module))
           for method,label in zip([make_gets_api,make_posts_api,make_puts_api,make_deletes_api],
                                   ["Get Methods","Post Methods","Put Methods","Delete Methods"]):
-            write_methods(f,module,attrs,method,label)
+            write_methods(f,module,attrs,method,label,modules)
 
 
         elif subdir == "tests":
           f.write(headers["api/tests"](module))
           for method,label in zip([test_gets_api,test_posts_api,test_puts_api,test_deletes_api],
                                   ["Get Methods","Post Methods","Put Methods","Delete Methods"]):
-            write_methods(f,module,attrs,method,label)
+            write_methods(f,module,attrs,method,label,modules)
 
       #endregion
 
   #region Conftests
 
-  for direct in ["database","api"]:
-    with open(f"{direct}/tests/conftest.py","w") as f:
-      f.write(headers["conftest"](module))
-      # Reset database function
+  with open(f"database/tests/conftest.py","w") as f:
+    f.write(headers["conftest"](module))
+    # Reset database function
+    f.write(
+      "@pytest.fixture(scope=\"function\", autouse=True)\n"\
+      "def reset_database():\n"\
+      "\tsql = \"DROP TABLE IF EXISTS "
+    )
+    for i,module in enumerate(modules):
       f.write(
-        "@pytest.fixture(scope=\"function\", autouse=True)\n"\
-        "def reset_database():\n"\
-        "\tsql = \"DROP TABLE IF EXISTS "
+        f"{module}{", " if i < len(modules)-1 else " CASCADE;\"\n"}"
       )
-      for i,module in enumerate(modules):
-        f.write(
-          f"{module}{", " if i < len(modules)-1 else " CASCADE;\"\n"}"
-        )
-      f.write("\tdb_utils.exec_commit(sql)\n")
-      for i,module in enumerate(modules):
-        f.write(
-          f"\tdb_utils.exec_sql_file(\"schema/{module}.sql\")\n"
-        )
-      
-      f.write("\n\n")
+    f.write("\tdb_utils.exec_commit(sql)\n")
+    for i,module in enumerate(modules):
+      f.write(
+        f"\tdb_utils.exec_sql_file(\"schema/{module}.sql\")\n"
+      )
+    
+    f.write("\n\n")
 
-      for i, (module, attrs) in enumerate(modules.items()):
-        singular = get_singular(module)
+    for i, (module, attrs) in enumerate(modules.items()):
+      singular = get_singular(module)
 
-        parameters = ""
-        dependencies = {}
-        first = True
-        for attr in attrs:
-          for other, other_attrs in modules.items():
-            if f"REFERENCES {other}".upper() in get_attr_arguments(attr)["column_parameters"].upper():
-              key = get_attr_name(attr)
-              parameters += f"{", " if not first else ""}one_{get_singular(other)}"
-              first = False
-              dependencies[key] = f"one_{get_singular(other)}.{get_pk(other_attrs)}"
+      parameters, dependencies = get_dependencies(modules, attrs)
 
-        f.write(
+      f.write(
         f"from database.src.{module} import create_{module}\n\n"\
           "@pytest.fixture(scope=\"function\")\n"\
         f"def one_{singular}({parameters}):\n"\
-        f"\tnew_{module} = "\
-          "{\n"
-        )
-        for attr in attrs:
-          key = get_attr_name(attr) 
-          if dependencies.get(key) is None:
-            value = repr(get_attr_arguments(attr)["sample"])
-            if value is None: continue
-          else:
-            value = dependencies[key]
-          f.write(f"\t\t\"{key}\": {value},\n")
-        f.write(
-          "\t}\n\n"\
-         f"\treturn create_{module}(new_{module})\n\n"
-        )
+        f"\tnew_{module} = "+"{\n"
+      )
+      for attr in attrs:
+        key = get_attr_name(attr)
+        if dependencies.get(key) is None:
+          value = repr(get_attr_arguments(attr)["sample"])
+          if value is None: continue
+        else:
+          value = dependencies[key][2]
+        f.write(f"\t\t\"{key}\": {value},\n")
+      f.write(
+        "\t}\n\n"\
+        f"\treturn create_{module}(new_{module})\n\n"
+      )
+
+  with open("api/tests/conftest.py","w") as f:
+    f.write("from database.tests.conftest import *\n\n")
 
   #endregion
   

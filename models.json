@@ -1,172 +1,25 @@
 {
-  "users": [
-    {
-      "id": [
-        "UUID",
-        "UUID",
-        "DEFAULT gen_random_uuid()",
-        "550e8400-e29b-41d4-a716-446655440000"
-      ]
-    },
-    {
-      "username": [
-        "str",
-        "VARCHAR(40)",
-        "NOT NULL UNIQUE",
-        "johndoe"
-      ]
-    },
-    {
-      "email": [
-        "str",
-        "VARCHAR(100)",
-        "NOT NULL UNIQUE",
-        "john@example.com"
-      ]
-    },
-    {
-      "created_at": [
-        "datetime",
-        "TIMESTAMP",
-        "DEFAULT CURRENT_TIMESTAMP",
-        "2026-04-03 12:00:00"
-      ]
+    "module": {
+        "singular": "module",
+        "object_name": "Module",
+        "pk": "module_id",
+        "attributes": {
+            "module_id": {
+                "python_type": "UUID",
+                "sql_type": "UUID",
+                "column_arguments": "DEFAULT gen_random_uuid()"
+            },
+            "module_attr1": {
+                "python_type": "str",
+                "sql_type": "TEXT",
+                "column_arguments": "NOT NULL",
+                "sample": "abc"
+            },
+            "module_attr2": {
+                "python_type": "int",
+                "sql_type": "INTEGER",
+                "column_arguments": "DEFAULT 123"
+            }
+        }
     }
-  ],
-  "products": [
-    {
-      "id": [
-        "int",
-        "SERIAL",
-        "",
-        "101"
-      ]
-    },
-    {
-      "name": [
-        "str",
-        "VARCHAR(100)",
-        "NOT NULL",
-        "Wireless Mouse"
-      ]
-    },
-    {
-      "price": [
-        "float",
-        "DECIMAL(10,2)",
-        "NOT NULL",
-        "29.99"
-      ]
-    },
-    {
-      "in_stock": [
-        "bool",
-        "BOOLEAN",
-        "DEFAULT TRUE",
-        "true"
-      ]
-    }
-  ],
-  "orders": [
-    {
-      "id": [
-        "int",
-        "SERIAL",
-        "",
-        "5001"
-      ]
-    },
-    {
-      "user_id": [
-        "UUID",
-        "UUID",
-        "REFERENCES users NOT NULL",
-        "550e8400-e29b-41d4-a716-446655440000"
-      ]
-    },
-    {
-      "total_amount": [
-        "float",
-        "DECIMAL(10,2)",
-        "NOT NULL",
-        "89.97"
-      ]
-    },
-    {
-      "status": [
-        "str",
-        "VARCHAR(20)",
-        "DEFAULT 'pending'",
-        "shipped"
-      ]
-    }
-  ],
-  "reviews": [
-    {
-      "id": [
-        "int",
-        "SERIAL",
-        "",
-        "9001"
-      ]
-    },
-    {
-      "product_id": [
-        "int",
-        "INTEGER",
-        "REFERENCES products NOT NULL",
-        "101"
-      ]
-    },
-    {
-      "rating": [
-        "int",
-        "INTEGER",
-        "CHECK (rating >= 1 AND rating <= 5)",
-        "5"
-      ]
-    },
-    {
-      "comment": [
-        "str",
-        "TEXT",
-        "",
-        "Great product!"
-      ]
-    }
-  ],
-  "categories": [
-    {
-      "id": [
-        "int",
-        "SERIAL",
-        "",
-        "10"
-      ]
-    },
-    {
-      "name": [
-        "str",
-        "VARCHAR(50)",
-        "NOT NULL UNIQUE",
-        "Electronics"
-      ]
-    },
-    {
-      "description": [
-        "str",
-        "TEXT",
-        "",
-        "Devices and gadgets"
-      ]
-    },
-    {
-      "active": [
-        "bool",
-        "BOOLEAN",
-        "DEFAULT TRUE",
-        "true"
-      ]
-    }
-  ]
 }

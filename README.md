@@ -96,7 +96,7 @@ This will also intialize the database tables for you. All that's left for you to
 python -m flask --app api/server.py run [--debug]
 ```
 
-The stubber will also generate the text file `database/schema/schema.txt`. This is a translated .sql file of all the generated tables that can be copy-pasted into [dbdiagram.io](https://dbdiagram.io/) (my database visualizer of choice). Foreign key references may need to be "massaged" a bit.
+The stubber will also generate the text file `database/schema/schema.txt`. This is a translated .sql file of all the generated tables that can be copy-pasted into [dbdiagram.io](https://dbdiagram.io/) (my database visualizer of choice).
 
 ## Teardown
 

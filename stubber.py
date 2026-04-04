@@ -77,13 +77,10 @@ class Stubber:
   #         "column_arguments": "NOT NULL",
   #         "sample": "abc"
   #       },
-  #       "module_attr2": {
-  #         "python_type": "int",
-  #         "sql_type": "INTEGER",
-  #         "column_arguments": "DEFAULT 123"
-  #       }
+  #       ...
   #     }
-  #   }
+  #   },
+  #   ...
   # }
 
   def get_singular(self, module: str) -> str:
@@ -123,16 +120,22 @@ class Stubber:
           dependencies[attr] = [other, self.get_pk(other), 
                                 f"one_{self.get_singular(other)}.{self.get_pk(other)}"]
           parameters += f"{", " if not first else ""}one_{self.get_singular(other)}"
+          first = False
 
     return parameters, dependencies
 
 
   def build_sample(self, module: str) -> str:
+    _, dependencies = self.get_dependencies(module)
     result = ""
     for attr, obj in self.modules[module]["attributes"].items():
-      sample = obj.get("sample")
-      if sample is None: continue
-      result += (f"\t\t\"{attr}\": {repr(sample)},\n")
+      if dependencies.get(attr) is None:
+        sample = obj.get("sample")
+        if sample is None: continue
+        sample = repr(sample)
+      else:
+        sample = dependencies[attr][2]
+      result += (f"\t\t\"{attr}\": {sample},\n")
 
     return result
 
@@ -153,7 +156,7 @@ class Stubber:
       "\t\"\"\"\n"\
     f"\tsql = \"SELECT * FROM {module};\"\n\n"\
       "\tresult = exec_get_all(sql)\n\n"\
-    f"\treturn [{singular.capitalize()}(row) for row in result]\n\n"
+    f"\treturn [{Object}(row) for row in result]\n\n"
     
     queried = \
     f"def get_{module}(kwargs) -> list[{Object}]:\n"\
@@ -659,14 +662,14 @@ class Stubber:
           f"from database.src.{module} import create_{module}\n\n"\
             "@pytest.fixture(scope=\"function\")\n"\
           f"def one_{singular}({parameters}):\n"\
-          f"\tnew_{module} = "+"{\n"
+          f"\tnew_{singular} = "+"{\n"
         )
         
         f.write(self.build_sample(module))
 
         f.write(
           "\t}\n\n"\
-          f"\treturn create_{module}(new_{module})\n\n"
+          f"\treturn create_{module}(new_{singular})\n\n"
         )
 
     with open("api/tests/conftest.py","w") as f:

@@ -48,6 +48,22 @@ headers = {
 
 #endregion
 
+#region Custom input
+
+# File body generator
+# def my_custom_file(modules):
+#   yield "Hello world!\n"
+
+# File path: write mode (e.g. "w" or "a+"), file body (iterable callable)
+custom = {
+  # "out/myfile.txt" : {
+      # "mode": "a+",
+      # "body": my_custom_file
+  # }
+}
+
+#endregion
+
 class Stubber:
 
   modules: Dict[str, Any]
@@ -103,11 +119,12 @@ class Stubber:
     return self.modules[module]["attributes"][pk]
 
 
-  def write_methods(self, f, module: str, method: callable, label: str) -> None:
-    f.write(f"#region {label}\n\n")
+  def write_methods(self, module: str, method: callable, label: str) -> None:
+    result = (f"#region {label}\n\n")
     for function in method(module):
-      f.write(function)
-    f.write("#endregion\n\n")
+      result += (function)
+    result += ("#endregion\n\n")
+    return result
 
 
   def get_dependencies(self, module: str) -> Dict[str,str]:
@@ -405,13 +422,17 @@ class Stubber:
     singular = self.get_singular(module)
     pk = self.get_pk(module)
 
-    return \
-    f"def test_get_one_{singular}(one_{singular}):\n"\
-    f"\tresult = db.get_{module}("\
-      "{"\
-    f"\"{pk}\": one_{singular}.{pk}"\
-      "})[0]\n"\
-    f"\tassert result == one_{singular}\n\n",
+    one = \
+      f"def test_get_one_{singular}(one_{singular}):\n"\
+      f"\tresult = db.get_{module}("+"{"+f"\"{pk}\": one_{singular}.{pk}"+"})[0]\n"\
+      f"\tassert result == one_{singular}\n\n"
+
+    all = \
+      f"def test_get_all_{module}(one_{singular}):\n"\
+      f"\tresult = db.get_all_{module}()[0]\n"\
+      f"\tassert result == one_{singular}\n\n"
+    
+    return one, all
 
 
   def test_creates(self, module: str) -> list[str]:
@@ -589,48 +610,41 @@ class Stubber:
 
     gen = ((direct, subdir, module) for direct in dirs for subdir in subdirs for module in self.modules)
     for (direct, subdir, module) in gen:
-      with open(f"{direct}/{subdir}/{"test_" if subdir == "tests" else ""}{module}{"_api" if subdir == "tests" and direct == "api" else ""}.py", "w") as f:
+      with open(f"{direct}/{subdir}/{"test_" if subdir == "tests" else ""}"\
+                f"{module}{"_api" if subdir == "tests" and direct == "api" else ""}.py","w") as f:
 
-        #region Database
+        # Write headers
+        f.write(headers.get(direct,lambda x,y:"")(module,self))
+        f.write(headers.get(f"{direct}/{subdir}",lambda x,y:"")(module,self))
+        
+        # Write methods and test methods
+        methods = {
+          "database": {
+            "src": zip([self.make_gets,self.make_creates,
+                        self.make_updates,self.make_deletes],
+                        ["Get Methods","Create Methods",
+                        "Update Methods","Delete Methods"]),
 
-        if direct == "database":
-          f.write(headers["database"](module,self))
-          
-          if subdir == "src":
-            for method,label in zip([self.make_gets,self.make_creates,
-                                     self.make_updates,self.make_deletes],
-                                    ["Get Methods","Create Methods","Update Methods","Delete Methods"]):
-              self.write_methods(f,module,method,label)
+            "tests": zip([self.test_gets,self.test_creates,
+                          self.test_updates,self.test_deletes],
+                        ["Get Methods","Create Methods",
+                          "Update Methods","Delete Methods"])
+          },
+          "api": {
+            "src": zip([self.make_gets_api,self.make_posts_api,
+                        self.make_puts_api,self.make_deletes_api],
+                      ["Get Methods","Create Methods",
+                        "Update Methods","Delete Methods"]),
 
-          elif subdir == "tests":
-            f.write(headers["database/tests"](module,self))
-            for method,label in zip([self.test_gets,self.test_creates,
-                                     self.test_updates,self.test_deletes],
-                                    ["Get Methods","Create Methods","Update Methods","Delete Methods"]):
-              self.write_methods(f,module,method,label)
-                
-        #endregion
-
-        #region API
-
-        elif direct == "api":
-
-          if subdir == "src":
-            f.write(headers["api/src"](module,self))
-            for method,label in zip([self.make_gets_api,self.make_posts_api,
-                                     self.make_puts_api,self.make_deletes_api],
-                                    ["Get Methods","Post Methods","Put Methods","Delete Methods"]):
-              self.write_methods(f,module,method,label)
-
-
-          elif subdir == "tests":
-            f.write(headers["api/tests"](module,self))
-            for method,label in zip([self.test_gets_api,self.test_posts_api,
-                                     self.test_puts_api,self.test_deletes_api],
-                                    ["Get Methods","Post Methods","Put Methods","Delete Methods"]):
-              self.write_methods(f,module,method,label)
-
-        #endregion
+            "tests": zip([self.test_gets_api,self.test_posts_api,
+                          self.test_puts_api,self.test_deletes_api],
+                        ["Get Methods","Post Methods",
+                          "Put Methods","Delete Methods"])
+          }
+        }
+        
+        for method,label in methods[direct][subdir]:
+          f.write(self.write_methods(module,method,label))
 
     #region Conftests
 
@@ -704,6 +718,16 @@ class Stubber:
         "\t\tdebug = False\n"\
         "\tapp.run(debug=debug)\n"
       )
+
+      #endregion
+
+      #region Custom files
+
+      for file, obj in custom.items():
+        os.makedirs(file[:file.rfind('/')],exist_ok=True)
+        with open(file, obj["mode"]) as f:
+          for body in obj["body"](self.modules):
+            f.write(body)
 
       #endregion
 

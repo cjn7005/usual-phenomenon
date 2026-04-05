@@ -8,6 +8,8 @@ from psycopg2.errors import UndefinedTable
 from database.src.db_utils import exec_sql_file, initialize_db
 from translator import translate_diagram
 
+# Flask api default
+api_host = "http://127.0.0.1:5000"
 
 #region Headers
 # imports, globals, etc.
@@ -717,7 +719,7 @@ class Stubber:
           f"export function {self.get_Object(module)}() "+"{\n"\
           "\treturn <MyTable \n"\
           "\t\ttable_name={"+f"[\"{self.get_Object(module)}\",\"{module.capitalize()}\"]"+"}\n"\
-          "\t\turl={"+f"\"http://127.0.0.1:5000/{module}/\""+"}\n"\
+          "\t\turl={"+f"\"{api_host}/{module}/\""+"}\n"\
           "\t\tcolumns={"+f"{[attr for attr in obj["attributes"]]}"+"}\n"\
           "\t\tcolumn_names={"+f"{[
             re.sub(

@@ -6,13 +6,13 @@ This is a tool for getting started creating a backend for a web application. It 
 
 ### Requirements 
 
-* [![postgresql](https://img.shields.io/badge/postgresql-4169e1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+* [![postgresql](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 
 * [![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 
-* [![React](https://shields.io)](https://react.dev/)
+* [![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
-* [![Node version](https://shields.io)](https://nodejs.org/)
+* [![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://react.dev/)
 
 
 This tool requires Python 3, PostgreSQL, Node.js, React.js, and Reactstrap. To install the necessary Python packages run:
@@ -123,13 +123,13 @@ The stubber will also generate the text file `database/schema/schema.txt`. This 
 
 ## Frontend
 
-The stubber will also create a (*very*) basic frontend UI to interact with your backend. It is simply one table per model that allows for creating, updating, and deleting your objects. Each table is located at "{home}/{module}". To run the frontend, navigate to `frontend/` and run:
+The stubber will also create a (*very*) basic frontend UI to interact with your backend. It is simply one table per model that allows for creating, updating, and deleting your objects. Each table is located at "http://{host}:{port}/{module}". To run the frontend, navigate to `frontend/` and run:
 
 ```zsh 
 npm start
 ```
 
-This will deploy the application to your local network. Refer to the output of the command to connect to the application.
+This will deploy the application to your local network. Refer to the output of the command to connect to the application. If you are deploying your flask API to a different host and port than the default, change `api_host` at the top of `stubber.py` (you will have to re-run it to apply the changes).
 
 
 ## Translator
@@ -156,3 +156,7 @@ If you wish to remove your generated files, simply run the clearer. *This is mai
 python clear.py
 y
 ```
+
+## Notes
+
+The created application is not meant to be robust by any means. This is merely a tool to get you started in development so you can focus more time into design. Now go make some web apps!

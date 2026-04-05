@@ -9,7 +9,7 @@ from database.src.db_utils import exec_sql_file, initialize_db
 from translator import translate_diagram
 
 # Flask api default
-api_host = "http://127.0.0.1:5000"
+api_host = "http://192.168.1.36:5001"
 
 #region Headers
 # imports, globals, etc.

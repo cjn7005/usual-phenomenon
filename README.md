@@ -1,6 +1,6 @@
 # Prototype Generator (ProtoGen)
 
-Prototype Generator (or ProtoGen for short) is a tool for getting started creating a backend for a web application. It generates basic CRUD SQL queries, APIs, and a basic frontend interface based on your proposed backend schema. 
+Prototype Generator (or ProtoGen for short) is a tool for getting started creating a backend for a web application. It generates basic CRUD SQL queries, APIs, and frontend interface based on your proposed backend schema. 
 
 ## Setup
 
@@ -32,7 +32,7 @@ npm install reactstrap react react-dom
 
 Next you must set up your database. First, create a file in `database/config` named `db.yml` (you can copy from `git_db.yml`). Then create a database and user (login enabled) using pgAdmin, and enter the names and passwords into your `db.yml`.
 
-Later when you are defining your attributes' python_types, if you are using imported types such as `UUID` or `datetime`, you must define these in `stubber.py`. Simply edit the `global_imports` variable at the top of the file (this will ensure your types are imported in every relevent file).
+Later when you are defining your attributes' python_types, if you are using imported types such as `UUID` or `datetime`, you must define these in `protogen.py`. Simply edit the `global_imports` variable at the top of the file (this will ensure your types are imported in every relevent file).
 
 
 ## Usage
@@ -45,14 +45,14 @@ To generate the code, first you must define your backend schema. To do this, you
 
 2. `pk` or `primary key`: The name of the primary key attribute. The referenced attribute **must** be defined in `attributes`.
 
-3. `singular`, optional: The singular of `module_name`. If omitted, the parser will assume a trailing "s" in `module_name` (i.e. "modules" -> "module" and "categories" -> "categorie").
+3. `singular`, optional: The singular of `module_name`. If omitted, the parser will naively assume a trailing "s" in `module_name` (i.e. "modules" -> "module" and "categories" -> "categorie").
 
-4. `object_name`, optional: The name of the model as it will appear in Python. The stubber will create Python classes for each model, and this is the name of that class. If omitted, will take on the capitalized version of the singular.
+4. `object_name`, optional: The name of the model as it will appear in Python. ProtoGen will create Python classes for each model, and this is the name of that class. If omitted, will take on the capitalized version of the singular.
 
 
 ### Attribute Definitions
 
-1. `python_type`: The attribute type as it will appear in Python type hints (e.g. str, int, datetime, etc.). Imported types should be definied in `stubber.py` (see [Setup](#setup)).
+1. `python_type`: The attribute type as it will appear in Python type hints (e.g. str, int, datetime, etc.). Imported types should be definied in `protogen.py` (see [Setup](#setup)).
 
 2. `sql_type`: The attribute type as it will appear in PostgreSQL (e.g. INT, UUID, TIMESTAMP, etc.). 
 
@@ -90,10 +90,10 @@ To generate the code, first you must define your backend schema. To do this, you
 }
 ```
 
-Once your models are defined, simply run the stubber:
+Once your models are defined, simply run ProtoGen:
 
 ```zsh
-python stubber.py
+python protogen.py
 ```
 
 This will generate `src` and `test` files in `database` and `api`, i.e.:
@@ -118,18 +118,18 @@ This will also intialize the database tables for you. All that's left for you to
 python -m flask --app api/server.py run [--debug]
 ```
 
-The stubber will also generate the text file `database/schema/schema.txt`. This is a translated .sql file of all the generated tables that can be copy-pasted into [dbdiagram.io](https://dbdiagram.io/) (my database visualizer of choice).
+ProtoGen will also generate the text file `database/schema/schema.txt`. This is a translated .sql file of all the generated tables that can be copy-pasted into [dbdiagram.io](https://dbdiagram.io/) (my database visualizer of choice).
 
 
 ## Frontend
 
-The stubber will also create a (*very*) basic frontend UI to interact with your backend. It is simply one table per model that allows for creating, updating, and deleting your objects. Each table is located at "http://{host}:{port}/{module}". To run the frontend, navigate to `frontend/` and run:
+ProtoGen will also create a (*very*) basic frontend UI to interact with your backend. It is simply one table per model that allows for creating, updating, and deleting your objects. Each table is located at "http://{host}:{port}/{module}". To run the frontend, navigate to `frontend/` and run:
 
 ```zsh 
 npm start
 ```
 
-This will deploy the application to your local network. Refer to the output of the command to connect to the application. If you are deploying your flask API to a different host and port than the default, change `api_host` at the top of `stubber.py` (you will have to re-run it to apply the changes).
+This will deploy the application to your local network. Refer to the output of the command to connect to the application. If you are deploying your flask API to a different host and port than the default, change `api_host` at the top of `protogen.py` (you will have to re-run it to apply the changes).
 
 
 ## Translator

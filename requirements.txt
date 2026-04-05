@@ -1,4 +1,5 @@
 flask
+flask-cors
 pydantic
 psycopg2-binary
 pyaml

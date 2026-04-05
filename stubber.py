@@ -8,6 +8,8 @@ from psycopg2.errors import UndefinedTable
 from database.src.db_utils import exec_sql_file, initialize_db
 from translator import translate_diagram
 
+# Flask api default
+api_host = "http://127.0.0.1:5000"
 
 #region Headers
 # imports, globals, etc.
@@ -46,6 +48,7 @@ headers = {
 
   "server" : lambda module, stubber: ( global_imports + \
     "from flask import Flask\n"\
+    "from flask_cors import CORS\n"\
     "import sys\n\n"
   )
 }
@@ -631,7 +634,7 @@ class Stubber:
     #endregion
 
     gen = ((direct, subdir, module) for direct in dirs for subdir in subdirs for module in self.modules)
-    for (direct, subdir, module) in gen:
+    for i, (direct, subdir, module) in enumerate(gen):
       with open(f"{direct}/{subdir}/{"test_" if subdir == "tests" else ""}"\
                 f"{module}{"_api" if subdir == "tests" and direct == "api" else ""}.py","w") as f:
 
@@ -667,6 +670,68 @@ class Stubber:
         
         for method,label in methods[direct][subdir]:
           f.write(self.write_methods(module,method,label))
+
+    #region Frontend
+
+    with open("frontend/src/App.js", "w") as f:
+      f.write(
+        "import { Navbar } from 'reactstrap';\n"\
+        "import {\n"\
+        "\tBrowserRouter as Router,\n"\
+        "\tRoutes,\n"\
+        "\tRoute,\n"\
+        "\tNavigate\n"\
+        "} from \"react-router-dom\";\n\n"\
+        "import { "
+      )
+      
+      for module in self.modules:
+        f.write(self.get_Object(module) + ", ")
+      
+      f.write(
+        "} from \'./components/Modules\';\n\n"\
+        "function App() {\n"\
+        "\treturn <>\n"\
+        "\t\t<Router>\n"\
+        "\t\t\t<Navbar />\n"\
+        "\t\t\t<Routes>\n"\
+        "\t\t\t\t<Route exact path=\"/\" element={<h1>It works!</h1>}/ >\n" #element={<Navigate to="/customers" />}
+      )
+      
+      for module in self.modules:
+        f.write(f"\t\t\t\t<Route path=\"/{module}\" element="+"{"+f"<{self.get_Object(module)} />"+"} />\n")
+
+      f.write(
+        "\t\t\t</Routes>\n"\
+        "\t\t</Router>\n"
+        "\t</>\n"
+        "}\n"
+        "\n"
+        "export default App;\n"
+      )
+
+    
+    with open("frontend/src/components/Modules.jsx","w") as f:
+      f.write("import { MyTable } from './MyTable';\n\n")
+
+      for module, obj in self.modules.items():
+        f.write(
+          f"export function {self.get_Object(module)}() "+"{\n"\
+          "\treturn <MyTable \n"\
+          "\t\ttable_name={"+f"[\"{self.get_Object(module)}\",\"{module.capitalize()}\"]"+"}\n"\
+          "\t\turl={"+f"\"{api_host}/{module}/\""+"}\n"\
+          "\t\tcolumns={"+f"{[attr for attr in obj["attributes"]]}"+"}\n"\
+          "\t\tcolumn_names={"+f"{[
+            re.sub(
+              r"([a-zA-Z])_([a-z])",lambda x: x.group(1) + " " + x.group(2).capitalize(),
+              re.sub(r"^([a-z])",lambda x: x.group().capitalize(), attr))
+                for attr in obj["attributes"]]}"+"}\n"\
+          "\t\tpk={"+f"\"{self.get_pk(module)}\""+"}\n"\
+          "\t\t/>\n"\
+          "}\n\n"
+        )
+    
+    #endregion
 
     #region Conftests
 
@@ -722,7 +787,10 @@ class Stubber:
         f.write(f"from api.src.{module} import {module}_bp\n")
       f.write("\n")
         
-      f.write("app = Flask(__name__)\n\n")
+      f.write(
+        "app = Flask(__name__)\n"\
+        "CORS(app, supports_credentials=True)\n\n"
+      )
 
       for module in self.modules:
         f.write(f"app.register_blueprint({module}_bp)\n")

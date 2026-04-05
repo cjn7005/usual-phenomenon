@@ -2,16 +2,18 @@
 For the purposes of transforming the .sql files into the format used by dbdiagram.io
 """
 
+import argparse
 import json
 import os
 import re
 import sys
 
-def translate_diagram():
+def translate_diagram(files: str):
     result = ""
-    for file in os.listdir("database/schema"):
+    
+    for file in files:
         if ".sql" not in file: continue
-        with open("database/schema/"+file, "r") as f:
+        with open(file, "r") as f:
             while line := f.readline():
                 line = re.sub(r"CREATE TABLE( IF NOT EXISTS)?","TABLE",line,flags=re.IGNORECASE)
                 line = re.sub(r"\(\s*$","{\n",line,flags=re.IGNORECASE)
@@ -35,11 +37,8 @@ def translate_diagram():
 
 
 def translate_sql(files):
-    if type(files) == str:
-        files = [files]
-
     result = {}
-
+    
     current_table = None
 
     for file in files:
@@ -88,13 +87,30 @@ def translate_sql(files):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) >= 2:
-        files = []
-        for file in os.listdir(sys.argv[1]):
-            if ".sql" not in file: continue
-            files.append(os.path.join(os.path.dirname(__file__), f"{sys.argv[1]}/{file}"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("dir",help="Input sql directory or file. Include the trailing \"/\" for directories.")
+    sub = parser.add_subparsers(dest="command")
 
-        print(translate_sql(files))
+    sql = sub.add_parser("sql", help="Convert your .sql files to properly structured .json files. Sample data will have to be entered and orderings may need to be edited.")
+    sql.set_defaults(func=translate_sql)
+    
+    dbdiagram = sub.add_parser("diagram", help="Convert your .sql files into a format that can be copy-pasted into dbdiagram.io.")
+    dbdiagram.set_defaults(func=translate_diagram)
 
-    else:
-        print(translate_diagram())
+    args = parser.parse_args()
+
+
+    is_dir = True
+    try:
+        ls = os.listdir(args.dir)
+        
+    except NotADirectoryError:
+        is_dir = False
+        ls = [args.dir]
+
+    files = []
+    for file in ls:
+        if ".sql" not in file: continue
+        files.append(os.path.join(os.path.dirname(__file__), f"{args.dir+"/" if is_dir else ""}{file}"))
+
+    print(args.func(files))

@@ -14,6 +14,7 @@ Next you must set up your database. First, create a file in `database/config` na
 
 Later when you are defining your attributes' python_types, if you are using imported types such as `UUID` or `datetime`, you must define these in `stubber.py`. Simply edit the `global_imports` variable at the top of the file (this will ensure your types are imported in every relevent file).
 
+
 ## Usage
 
 To generate the code, first you must define your backend schema. To do this, you will enter in your desired models into `models.json`. Each "model" (or "module," I flip back and forth between the terms) will be a table in your Postgres database, and each attribute a column. 
@@ -27,6 +28,7 @@ To generate the code, first you must define your backend schema. To do this, you
 3. `singular`, optional: The singular of `module_name`. If omitted, the parser will assume a trailing "s" in `module_name` (i.e. "modules" -> "module" and "categories" -> "categorie").
 
 4. `object_name`, optional: The name of the model as it will appear in Python. The stubber will create Python classes for each model, and this is the name of that class. If omitted, will take on the capitalized version of the singular.
+
 
 ### Attribute Definitions
 
@@ -98,6 +100,20 @@ python -m flask --app api/server.py run [--debug]
 
 The stubber will also generate the text file `database/schema/schema.txt`. This is a translated .sql file of all the generated tables that can be copy-pasted into [dbdiagram.io](https://dbdiagram.io/) (my database visualizer of choice).
 
+
+## Translator
+
+The translator (`translator.py`) can "translate" between SQL, [dbdiagram.io](https://dbdiagram.io/), and my own data structure. To use, simply run:
+
+```zsh
+python translator.py {dir} {sql or diagram} > {out}
+```
+
+To generate a .json file from your schema, enter the location of your .sql file(s) with `dir` and choose `sql`. The script will print to stout, so define your output file with `out`.
+
+To generate [dbdiagram.io](https://dbdiagram.io/)-friendly SQL, simply do the same as above but choose `diagram`.
+
+
 ## Teardown
 
 If you wish to remove your generated files, simply run the clearer. *This is mainly used for development and debugging purposes. If you have no intention of deleting everything at the press of a button then feel free to delete this file.*
@@ -109,4 +125,3 @@ If you wish to remove your generated files, simply run the clearer. *This is mai
 python clear.py
 y
 ```
-

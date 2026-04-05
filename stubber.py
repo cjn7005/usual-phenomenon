@@ -46,6 +46,7 @@ headers = {
 
   "server" : lambda module, stubber: ( global_imports + \
     "from flask import Flask\n"\
+    "from flask_cors import CORS\n"\
     "import sys\n\n"
   )
 }
@@ -722,7 +723,10 @@ class Stubber:
         f.write(f"from api.src.{module} import {module}_bp\n")
       f.write("\n")
         
-      f.write("app = Flask(__name__)\n\n")
+      f.write(
+        "app = Flask(__name__)\n"\
+        "CORS(app)\n\n"
+      )
 
       for module in self.modules:
         f.write(f"app.register_blueprint({module}_bp)\n")

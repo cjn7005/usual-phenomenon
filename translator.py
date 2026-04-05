@@ -4,7 +4,11 @@ import os
 import re
 
 
-def translate_diagram(files: str):
+def translate_diagram(files: list[str]):
+    """
+    Translates the files into a dbdiagram.io-friendly format
+    """
+
     result = ""
     
     for file in files:
@@ -33,10 +37,14 @@ def translate_diagram(files: str):
 
 
 def translate_sql(files):
+    """
+    Translates the provided .sql files into the expected .json structure for ProtoGen
+    """
     result = {}
     current_table = None
 
     for file in files:
+        if ".sql" not in file: continue
         with open(file,"r") as f:
             while line := f.readline():
                 if re.findall(";",line):

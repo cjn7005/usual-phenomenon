@@ -5,6 +5,13 @@ import subprocess
 from database.src import db_utils
 
 def remove(file_path, rf = False):
+    """
+    Removes the file at file_path
+
+    Args:
+        file_path (str): the file path
+        rf (bool, optional): the file path is a directory. Defaults to False.
+    """
     try: # MacOS
         if rf:
             subprocess.run(["rm","-rf",file_path])
@@ -48,7 +55,7 @@ def main():
 
 
 if __name__ == "__main__":
-    print("Are you sure you want to delete all files (y/n)?")
+    print("Are you sure you want to delete all files in database/ and api/ (y/n)?")
     put = input()
     if put == "y":
         main()
